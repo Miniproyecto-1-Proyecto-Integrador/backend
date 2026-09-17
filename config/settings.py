@@ -25,7 +25,10 @@ SECRET_KEY = 'django-insecure-turt(b#i^t0(vs68&qr((j2+^#&nc_jqyzurde2=g*)_^dsrr4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+]
 
 
 # Application definition
@@ -52,7 +55,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
 ROOT_URLCONF = 'config.urls'
