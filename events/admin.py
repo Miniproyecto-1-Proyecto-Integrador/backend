@@ -6,7 +6,7 @@ from .models import Event,Subtask
 #registramos el primer modelo de Eventos. HS 1
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ("id", "nombre", "tipo", "fecha_hora", "creado_en")
+    list_display = ("id", "nombre", "tipo", "fecha_hora","cliente_contacto","lugar", "creado_en","actualizado_en")
 
 @admin.register(Subtask)
 class SubtaskAdmin(admin.ModelAdmin):
