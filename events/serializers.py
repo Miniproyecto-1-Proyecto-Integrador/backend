@@ -1,8 +1,13 @@
 from rest_framework import serializers
-from .models import Event
+from .models import Event,Subtask
 
 
 class EventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = ["id", "nombre", "tipo", "fecha_hora", "cliente_contacto", "lugar", "creado_en"]
+        read_only_fields = ["id", "creado_en"]
+      
     nombre = serializers.CharField(
         max_length=200,
         error_messages={
@@ -38,7 +43,20 @@ class EventSerializer(serializers.ModelSerializer):
         },
     )
 
+
+##Serializador de las subtask
+class SubtaskSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Event
-        fields = ["id", "nombre", "tipo", "fecha_hora", "cliente_contacto", "lugar", "creado_en"]
-        read_only_fields = ["id", "creado_en"]
+        model = Subtask
+        fields = ["id", "evento", "titulo", "fecha_objetivo", "horas_estimadas", "creado_en"]
+        read_only_fields = ["id", "evento", "creado_en"]
+
+    def validate_titulo(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("El título de la gestión es obligatorio.")
+        return value
+
+    def validate_horas_estimadas(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Las horas estimadas deben ser mayores a cero.")
+        return value
