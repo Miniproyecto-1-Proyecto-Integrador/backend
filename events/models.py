@@ -16,4 +16,4 @@ class Event(models.Model):
         ordering = ["-creado_en"]
 
     def __str__(self):
-        return f"{self.nombre} ({self.tipo()})"
+        return f"{self.nombre} ({self.tipo})"
