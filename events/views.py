@@ -35,6 +35,12 @@ class SubtaskListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(evento=self.get_event())
 
+    ## fix de times de eventos
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["evento"] = self.get_event()
+        return ctx
+
 
 ##Implementacion de US-3
 ##aqui ya tenemos creados los eventos, las subtasks, por lo que 
