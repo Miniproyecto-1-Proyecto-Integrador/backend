@@ -50,7 +50,19 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'events',
+    'drf_spectacular',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'API - Organizador de Eventos',
+    'DESCRIPTION': 'Documentación oficial del backend para el miniproyecto 1.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
