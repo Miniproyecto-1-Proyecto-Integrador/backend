@@ -70,7 +70,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
         model = Subtask
         fields = [
             "id", "evento", "titulo", "fecha_objetivo", "horas_estimadas",
-            "estado", "nota", "creado_en",
+            "estado", "creado_en",
         ]
         read_only_fields = ["id", "evento", "creado_en"]
         extra_kwargs = {
@@ -91,6 +91,14 @@ class SubtaskSerializer(serializers.ModelSerializer):
             }},
         }
 
+    estado = serializers.ChoiceField(
+        choices=Subtask.ESTADO_CHOICES,
+        required=False,
+        error_messages={
+            "invalid_choice": "El estado solo puede ser 'pendiente' o 'hecha'."
+        },
+    )
+
     def to_internal_value(self, data):
         data = data.copy()
         for campo in ("fecha_objetivo", "horas_estimadas"):
@@ -102,7 +110,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Las horas estimadas deben ser mayores a cero.")
         return value
-    
+
     # La gestion no puede programarse antes de hoy.
     def validate_fecha_objetivo(self, value):
         hoy = timezone.localdate()
@@ -124,6 +132,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
                 })
         return attrs
 
+
 # Serializer de solo lectura usado por /hoy/. ademas de los campos de la
 # gestión, expone el nombre del evento al que pertenece y el grupo al que
 # fue asignada (vencida/hoy/proxima)
@@ -136,7 +145,7 @@ class HoySubtaskSerializer(serializers.ModelSerializer):
         model = Subtask
         fields = [
             "id", "titulo", "fecha_objetivo", "horas_estimadas",
-            "estado", "nota", "evento_id", "evento_nombre", "grupo",
+            "estado", "evento_id", "evento_nombre", "grupo",
         ]
 
     def get_grupo(self, obj):

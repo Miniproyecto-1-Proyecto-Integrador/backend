@@ -42,11 +42,9 @@ class Subtask(models.Model):
 
     PENDIENTE = "pendiente"
     HECHA = "hecha"
-    POSPUESTA = "pospuesta"
     ESTADO_CHOICES = [
         (PENDIENTE, "Pendiente"),
         (HECHA, "Hecha"),
-        (POSPUESTA, "Pospuesta"),
     ]
 
     evento = models.ForeignKey(
@@ -66,7 +64,6 @@ class Subtask(models.Model):
         choices=ESTADO_CHOICES,
         default=PENDIENTE,
     )
-    nota = models.TextField(blank=True, default="")
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:

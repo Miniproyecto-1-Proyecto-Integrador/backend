@@ -1,6 +1,8 @@
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import NotAuthenticated
+from rest_framework_simplejwt.exceptions import InvalidToken
 
 
 def custom_exception_handler(exc, context):
@@ -11,8 +13,14 @@ def custom_exception_handler(exc, context):
     """
     response = exception_handler(exc, context)
     if response is not None:
+        # Personaliza los mensajes de error de autenticacion para que sean
+        # mas amigables y consistentes con el resto de la API.
+        if isinstance(exc, InvalidToken):
+            response.data = {"detail": "El token no es válido o ya expiró. Inicia sesión de nuevo."}
+        elif isinstance(exc, NotAuthenticated):
+            response.data = {"detail": "No se proporcionaron credenciales de autenticación."}
         return response
-
+ 
     # Cualquier excepcion no controlada por DRF
     # cae aqui. se responde 500 en JSON en vez de dejar pasar la pagina
     # de error por defecto de django.

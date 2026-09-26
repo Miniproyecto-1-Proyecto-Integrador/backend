@@ -102,6 +102,7 @@ class SubtaskDetailView(generics.RetrieveUpdateDestroyAPIView):
             ctx["evento"] = evento
         return ctx
 
+
 REGLA_PRIORIDAD = (
     "Se ordenan primero las gestiones vencidas, luego las de hoy y por "
     "último las próximas. Dentro de cada grupo, la gestión con la fecha "
@@ -109,7 +110,7 @@ REGLA_PRIORIDAD = (
     "mismo día, se prioriza la que requiere menos horas estimadas."
 )
 
-ESTADOS_VALIDOS = {Subtask.PENDIENTE, Subtask.HECHA, Subtask.POSPUESTA, "todas"}
+ESTADOS_VALIDOS = {Subtask.PENDIENTE, Subtask.HECHA, "todas"}
 
 
 class HoyView(APIView):
@@ -126,10 +127,10 @@ class HoyView(APIView):
         estado_param = request.query_params.get("estado", Subtask.PENDIENTE)
         if estado_param not in ESTADOS_VALIDOS:
             raise ValidationError({
-                "estado": (
+                "estado": [
                     f"Valor inválido. Usa uno de: "
                     f"{', '.join(sorted(ESTADOS_VALIDOS))}."
-                )
+                ]
             })
 
         evento_param = request.query_params.get("evento")
@@ -138,7 +139,7 @@ class HoyView(APIView):
             try:
                 evento_id = int(evento_param)
             except (TypeError, ValueError):
-                raise ValidationError({"evento": "Debe ser el id numérico de un evento."})
+                raise ValidationError({"evento": ["Debe ser el id numérico de un evento."]})
             evento_obj = Event.objects.filter(
                 pk=evento_id, organizador=request.user
             ).first()

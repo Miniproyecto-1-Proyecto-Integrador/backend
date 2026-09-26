@@ -57,3 +57,33 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data["email"],
             password=validated_data["password"],
         )
+
+class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Permite iniciar sesión con correo o con nombre de usuario
+    """
+    
+    default_error_messages = {
+        "no_active_account": "Correo o contraseña incorrectos.",
+    }
+    
+    def validate(self, attrs):
+        login = attrs.get("username", "")
+        if "@" in login:
+            user_obj = User.objects.filter(email__iexact=login).first()
+            if user_obj is not None:
+                attrs["username"] = user_obj.get_username()
+    
+        try:
+            data = super().validate(attrs)
+        except AuthenticationFailed:
+            raise AuthenticationFailed(
+                "Correo o contraseña incorrectos.", "no_active_account"
+            )
+    
+        data["user"] = {
+            "id": self.user.id,
+            "username": self.user.username,
+            "email": self.user.email,
+        }
+        return data
