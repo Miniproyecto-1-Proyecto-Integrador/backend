@@ -7,8 +7,14 @@ from django.utils import timezone
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
-        fields = ["id", "nombre", "tipo", "fecha_hora", "cliente_contacto", "lugar", "creado_en"]
-        read_only_fields = ["id", "creado_en"]
+        fields = [
+            "id", "nombre", "tipo", "fecha_hora", "cliente_contacto",
+            "lugar", "creado_en", "organizador",
+        ]
+
+        # organizador ya no se recibe del cliente, se
+        # automáticamente a partir de request.user
+        read_only_fields = ["id", "creado_en", "organizador"]
 
     ## fix: validacion de fecha de asignacion de evento.
     ## para evitar que se asignen eventos del pasado.    
@@ -97,6 +103,15 @@ class SubtaskSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Las horas estimadas deben ser mayores a cero.")
         return value
 
+    # La gestion no puede programarse antes de hoy.
+    def validate_fecha_objetivo(self, value):
+        hoy = timezone.localdate()
+        if value < hoy:
+            raise serializers.ValidationError(
+                "La fecha objetivo no puede ser anterior a hoy."
+            )
+        return value
+
     # Corrección 3
     def validate(self, attrs):
         evento = self.context.get("evento") or getattr(self.instance, "evento", None)
@@ -108,3 +123,22 @@ class SubtaskSerializer(serializers.ModelSerializer):
                     "fecha_objetivo": f"La fecha objetivo no puede ser posterior a la fecha del evento ({limite:%d/%m/%Y})."
                 })
         return attrs
+
+    # Serializer de solo lectura usado por /hoy/. ademas de los campos de la
+    # gestion, expone el nombre del evento al que pertenece y el grupo al que
+    # fue asignada (vencida/hoy/proxima)
+    class HoySubtaskSerializer(serializers.ModelSerializer):
+        evento_id = serializers.IntegerField(source="evento.id")
+        evento_nombre = serializers.CharField(source="evento.nombre")
+        grupo = serializers.SerializerMethodField()
+    
+        class Meta:
+            model = Subtask
+            fields = [
+                "id", "titulo", "fecha_objetivo", "horas_estimadas",
+                "estado", "nota", "evento_id", "evento_nombre", "grupo",
+            ]
+    
+        def get_grupo(self, obj):
+            # La vista anota cada objeto con `_grupo` antes de serializar.
+            return getattr(obj, "_grupo", None)

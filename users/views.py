@@ -1,0 +1,12 @@
+from rest_framework import generics, status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .serializers import RegisterSerializer
+
+
+class RegisterView(generics.CreateAPIView):
+    """POST /api/auth/register/  (público)"""
+    serializer_class = RegisterSerializer
+    permission_classes = [AllowAny]

@@ -4,6 +4,7 @@ from rest_framework.exceptions import NotFound
 from .models import Event,Subtask
 from .serializers import EventSerializer
 from .serializers import SubtaskSerializer
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 
 ##view generica de health check para el back.
@@ -14,9 +15,16 @@ def health_check(request):
     })
 
 ##Implementacion de view de eventos US-1
+## Requiere autenticacion y filtra/asigna por organizador
 class EventListCreateView(generics.ListCreateAPIView):
-    queryset = Event.objects.all()
     serializer_class = EventSerializer
+    permission_classes = [IsAuthenticated]
+ 
+    def get_queryset(self):
+        return Event.objects.filter(organizador=self.request.user)
+ 
+    def perform_create(self, serializer):
+        serializer.save(organizador=self.request.user)
 
 
 ##Implementacion de view de subtasks US 2
