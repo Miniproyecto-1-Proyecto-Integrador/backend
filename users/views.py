@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema, OpenApiExample
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -22,6 +23,39 @@ class LoginView(TokenObtainPairView):
     """
     serializer_class = EmailOrUsernameTokenObtainPairSerializer
     permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Login (correo o usuario + contraseña)",
+        description=(
+            "El campo `username` acepta correo o nombre de usuario. "
+            "Devuelve `access`/`refresh` (JWT) y los datos del usuario."
+        ),
+        examples=[
+            OpenApiExample(
+                "Request",
+                value={"username": "gaturro@correo.com", "password": "unaClaveSegura123"},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Login exitoso",
+                value={
+                    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "user": {"id": 3, "username": "gaturro", "email": "gaturro@correo.com"},
+                },
+                response_only=True,
+                status_codes=["200"],
+            ),
+            OpenApiExample(
+                "Credenciales inválidas",
+                value={"detail": "Correo o contraseña incorrectos."},
+                response_only=True,
+                status_codes=["401"],
+            ),
+        ],
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
 
 
 class MeView(APIView):

@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter, OpenApiTypes
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -115,7 +116,7 @@ ESTADOS_VALIDOS = {Subtask.PENDIENTE, Subtask.HECHA, "todas"}
 
 class HoyView(APIView):
     """
-    GET /api/hoy/?evento=<id>&estado=<pendiente|hecha|pospuesta|todas>
+    GET /api/hoy/?evento=<id>&estado=<pendiente|hecha|todas>
 
     Devuelve, para el organizador autenticado, sus gestiones logisticas
     agrupadas en "vencidas", "hoy" y "proximas".
@@ -123,6 +124,96 @@ class HoyView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Gestiones agrupadas: Vencidas / Hoy / Próximas",
+        description=(
+            "Devuelve, para el organizador autenticado, sus gestiones "
+            "ordenadas por fecha objetivo (desempate por menor esfuerzo "
+            "estimado) y agrupadas en vencidas / hoy / proximas."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="evento",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Id de un evento propio. Si se omite, incluye todos los eventos del organizador.",
+            ),
+            OpenApiParameter(
+                name="estado",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                enum=[Subtask.PENDIENTE, Subtask.HECHA, "todas"],
+                description="Filtra por estado de la gestión. Default: pendiente.",
+            ),
+        ],
+        responses={
+            200: OpenApiTypes.OBJECT,
+            400: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                "Éxito con gestiones",
+                value={
+                    "hoy": "2026-09-26",
+                    "regla_prioridad": REGLA_PRIORIDAD,
+                    "filtros_aplicados": {"evento": None, "estado": "pendiente"},
+                    "grupos": {
+                        "vencidas": [{
+                            "id": 12, "titulo": "Confirmar catering",
+                            "fecha_objetivo": "2026-09-20", "horas_estimadas": "2.00",
+                            "estado": "pendiente",
+                            "evento_id": 5, "evento_nombre": "Boda Andrea y Luis",
+                            "grupo": "vencida",
+                        }],
+                        "hoy": [],
+                        "proximas": [{
+                            "id": 15, "titulo": "Enviar invitaciones",
+                            "fecha_objetivo": "2026-10-01", "horas_estimadas": "1.50",
+                            "estado": "pendiente",
+                            "evento_id": 5, "evento_nombre": "Boda Andrea y Luis",
+                            "grupo": "proxima",
+                        }],
+                    },
+                    "total": 2,
+                },
+                response_only=True,
+                status_codes=["200"],
+            ),
+            OpenApiExample(
+                "Sin gestiones (estado vacío)",
+                value={
+                    "hoy": "2026-09-26",
+                    "regla_prioridad": REGLA_PRIORIDAD,
+                    "filtros_aplicados": {"evento": None, "estado": "pendiente"},
+                    "grupos": {"vencidas": [], "hoy": [], "proximas": []},
+                    "total": 0,
+                },
+                response_only=True,
+                status_codes=["200"],
+            ),
+            OpenApiExample(
+                "Estado inválido",
+                value={"estado": ["Valor inválido. Usa uno de: hecha, pendiente, todas."]},
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "Evento no numérico",
+                value={"evento": ["Debe ser el id numérico de un evento."]},
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "Evento inexistente o ajeno",
+                value={"detail": "El evento no existe."},
+                response_only=True,
+                status_codes=["404"],
+            ),
+        ],
+    )
     def get(self, request):
         estado_param = request.query_params.get("estado", Subtask.PENDIENTE)
         if estado_param not in ESTADOS_VALIDOS:
