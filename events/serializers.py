@@ -1,17 +1,22 @@
 from rest_framework import serializers
-from .models import Event,Subtask
+from .models import Event, Subtask
 from django.utils import timezone
-
 
 
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
-        fields = ["id", "nombre", "tipo", "fecha_hora", "cliente_contacto", "lugar", "creado_en"]
-        read_only_fields = ["id", "creado_en"]
+        fields = [
+            "id", "nombre", "tipo", "fecha_hora", "cliente_contacto",
+            "lugar", "creado_en", "organizador",
+        ]
+
+        # organizador ya no se recibe del cliente: la vista lo asigna
+        # automaticamente a partir de request.user
+        read_only_fields = ["id", "creado_en", "organizador"]
 
     ## fix: validacion de fecha de asignacion de evento.
-    ## para evitar que se asignen eventos del pasado.    
+    ## para evitar que se asignen eventos del pasado.
     def validate_fecha_hora(self, value):
         es_nuevo = self.instance is None
         cambio = not es_nuevo and value != self.instance.fecha_hora
@@ -20,7 +25,7 @@ class EventSerializer(serializers.ModelSerializer):
                 "La fecha y hora del evento ya pasó. Elige una fecha y hora futura."
             )
         return value
-    
+
     nombre = serializers.CharField(
         max_length=200,
         error_messages={
@@ -55,17 +60,18 @@ class EventSerializer(serializers.ModelSerializer):
             "required": "El lugar es obligatorio.",
         },
     )
-    
 
 
 ##Serializador de las subtask
 ## rework: se modifica subtaskserializer para que se tenga en cuenta
 ## la hora de creacion, ademas de validar formatos no validos.
-
 class SubtaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subtask
-        fields = ["id", "evento", "titulo", "fecha_objetivo", "horas_estimadas", "creado_en"]
+        fields = [
+            "id", "evento", "titulo", "fecha_objetivo", "horas_estimadas",
+            "estado", "creado_en",
+        ]
         read_only_fields = ["id", "evento", "creado_en"]
         extra_kwargs = {
             "titulo": {"error_messages": {
@@ -85,6 +91,14 @@ class SubtaskSerializer(serializers.ModelSerializer):
             }},
         }
 
+    estado = serializers.ChoiceField(
+        choices=Subtask.ESTADO_CHOICES,
+        required=False,
+        error_messages={
+            "invalid_choice": "El estado solo puede ser 'pendiente' o 'hecha'."
+        },
+    )
+
     def to_internal_value(self, data):
         data = data.copy()
         for campo in ("fecha_objetivo", "horas_estimadas"):
@@ -95,6 +109,15 @@ class SubtaskSerializer(serializers.ModelSerializer):
     def validate_horas_estimadas(self, value):
         if value <= 0:
             raise serializers.ValidationError("Las horas estimadas deben ser mayores a cero.")
+        return value
+
+    # La gestion no puede programarse antes de hoy.
+    def validate_fecha_objetivo(self, value):
+        hoy = timezone.localdate()
+        if value < hoy:
+            raise serializers.ValidationError(
+                "La fecha objetivo no puede ser anterior a hoy."
+            )
         return value
 
     # Corrección 3
@@ -108,3 +131,23 @@ class SubtaskSerializer(serializers.ModelSerializer):
                     "fecha_objetivo": f"La fecha objetivo no puede ser posterior a la fecha del evento ({limite:%d/%m/%Y})."
                 })
         return attrs
+
+
+# Serializer de solo lectura usado por /hoy/. ademas de los campos de la
+# gestión, expone el nombre del evento al que pertenece y el grupo al que
+# fue asignada (vencida/hoy/proxima)
+class HoySubtaskSerializer(serializers.ModelSerializer):
+    evento_id = serializers.IntegerField(source="evento.id")
+    evento_nombre = serializers.CharField(source="evento.nombre")
+    grupo = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Subtask
+        fields = [
+            "id", "titulo", "fecha_objetivo", "horas_estimadas",
+            "estado", "evento_id", "evento_nombre", "grupo",
+        ]
+
+    def get_grupo(self, obj):
+        # La vista anota cada objeto con `_grupo` antes de serializar.
+        return getattr(obj, "_grupo", None)
