@@ -1,3 +1,5 @@
+from django.contrib.auth.validators import UnicodeUsernameValidator
+from rest_framework.validators import UniqueValidator
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
@@ -28,6 +30,22 @@ class RegisterSerializer(serializers.ModelSerializer):
             "blank": "El correo es obligatorio.",
             "required": "El correo es obligatorio.",
             "invalid": "Ingresa un correo válido.",
+        },
+    )
+
+    username = serializers.CharField(
+        max_length=150,
+        validators=[
+            UnicodeUsernameValidator(message="Usa solo letras, números y @/./+/-/_."),
+            UniqueValidator(
+                queryset=User.objects.all(),
+                lookup="iexact",
+                message="Intenta utilizando otro nombre de usuario.",
+            ),
+        ],
+        error_messages={
+            "blank": "El usuario es obligatorio.",
+            "required": "El usuario es obligatorio.",
         },
     )
 
