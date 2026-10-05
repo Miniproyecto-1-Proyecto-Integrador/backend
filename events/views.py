@@ -11,9 +11,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Event, Subtask
-from .serializers import EventSerializer, SubtaskSerializer, HoySubtaskSerializer
-
+from .carga import limite_de
+from .models import Event, LimiteDiario, Subtask
+from .serializers import (
+    EventSerializer,
+    HoySubtaskSerializer,
+    LimiteDiarioSerializer,
+    SubtaskSerializer,
+)
 
 ## view generica de health check para el back. Se deja publica (no
 ## requiere login) para que el front y las herramientas de despliegue
@@ -276,3 +281,25 @@ class HoyView(APIView):
             "total": len(vencidas) + len(para_hoy) + len(proximas),
         }
         return Response(data, status=status.HTTP_200_OK)
+
+
+## US-12: limite diario de horas por organizador
+class LimiteDiarioView(APIView):
+    """GET/PUT /api/limite-diario/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Si el organizador nunca lo configuro, se responde el valor por
+        # defecto sin crear nada en la base de datos.
+        data = LimiteDiarioSerializer({"horas": limite_de(request.user)}).data
+        return Response(data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        serializer = LimiteDiarioSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        LimiteDiario.objects.update_or_create(
+            organizador=request.user,
+            defaults={"horas": serializer.validated_data["horas"]},
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)

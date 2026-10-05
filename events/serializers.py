@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 from .models import Event, Subtask
 from django.utils import timezone
@@ -151,3 +152,26 @@ class HoySubtaskSerializer(serializers.ModelSerializer):
     def get_grupo(self, obj):
         # La vista anota cada objeto con `_grupo` antes de serializar.
         return getattr(obj, "_grupo", None)
+
+
+# US-12: límite diario de horas del organizador.
+MENSAJE_RANGO_LIMITE = "El límite diario debe estar entre 1 y 16 horas."
+
+
+class LimiteDiarioSerializer(serializers.Serializer):
+    horas = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        min_value=Decimal("1"),
+        max_value=Decimal("16"),
+        error_messages={
+            "required": "El límite diario es obligatorio.",
+            "null": "El límite diario es obligatorio.",
+            "invalid": "El límite diario debe ser un número válido.",
+            "min_value": MENSAJE_RANGO_LIMITE,
+            "max_value": MENSAJE_RANGO_LIMITE,
+            "max_digits": MENSAJE_RANGO_LIMITE,
+            "max_whole_digits": MENSAJE_RANGO_LIMITE,
+            "max_decimal_places": "El límite diario admite máximo 2 decimales.",
+        },
+    )
