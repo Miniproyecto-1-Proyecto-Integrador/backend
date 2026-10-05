@@ -91,6 +91,10 @@ class SubtaskSerializer(serializers.ModelSerializer):
                 "null": "Las horas estimadas son obligatorias.",
                 "required": "Las horas estimadas son obligatorias.",
                 "invalid": "Las horas estimadas deben ser un número válido.",
+                "min_value": "Las horas estimadas deben ser mayores a cero.",
+                "max_digits": "Las horas estimadas no pueden superar 999.99.",
+                "max_whole_digits": "Las horas estimadas no pueden superar 999.99.",
+                "max_decimal_places": "Las horas estimadas admiten máximo 2 decimales.",
             }},
         }
 
