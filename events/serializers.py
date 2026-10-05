@@ -1,5 +1,6 @@
 from decimal import Decimal
 from rest_framework import serializers
+from .carga import verificar_conflicto
 from .models import Event, Subtask
 from django.utils import timezone
 
@@ -61,6 +62,7 @@ class EventSerializer(serializers.ModelSerializer):
             "required": "El lugar es obligatorio.",
         },
     )
+
 
 
 ##Serializador de las subtask
@@ -131,7 +133,37 @@ class SubtaskSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "fecha_objetivo": f"La fecha objetivo no puede ser posterior a la fecha del evento ({limite:%d/%m/%Y})."
                 })
+        self._verificar_horas_del_dia(attrs)
         return attrs
+
+    # US-07: el dia no puede pasarse del limite diario del organizador.
+    def _verificar_horas_del_dia(self, attrs):
+        request = self.context.get("request")
+        if request is None:
+            return
+        actual = self.instance
+        fecha = attrs.get("fecha_objetivo", getattr(actual, "fecha_objetivo", None))
+        horas = attrs.get("horas_estimadas", getattr(actual, "horas_estimadas", None))
+        estado = attrs.get("estado", getattr(actual, "estado", Subtask.PENDIENTE))
+
+        # Una gestion hecha no cuenta para las horas del dia.
+        if estado == Subtask.HECHA or fecha is None or horas is None:
+            return
+        # Si se edita sin tocar fecha, horas ni estado (ej. solo el titulo),
+        # no hay nada nuevo que validar.
+        if (
+            actual is not None
+            and fecha == actual.fecha_objetivo
+            and horas == actual.horas_estimadas
+            and estado == actual.estado
+        ):
+            return
+
+        verificar_conflicto(
+            request.user, fecha, horas,
+            excluir_id=actual.pk if actual is not None else None,
+        )
+    
 
 
 # Serializer de solo lectura usado por /hoy/. ademas de los campos de la
