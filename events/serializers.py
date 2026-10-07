@@ -1,4 +1,6 @@
+from decimal import Decimal
 from rest_framework import serializers
+from .carga import verificar_conflicto
 from .models import Event, Subtask
 from django.utils import timezone
 
@@ -62,6 +64,7 @@ class EventSerializer(serializers.ModelSerializer):
     )
 
 
+
 ##Serializador de las subtask
 ## rework: se modifica subtaskserializer para que se tenga en cuenta
 ## la hora de creacion, ademas de validar formatos no validos.
@@ -88,6 +91,10 @@ class SubtaskSerializer(serializers.ModelSerializer):
                 "null": "Las horas estimadas son obligatorias.",
                 "required": "Las horas estimadas son obligatorias.",
                 "invalid": "Las horas estimadas deben ser un número válido.",
+                "min_value": "Las horas estimadas deben ser mayores a cero.",
+                "max_digits": "Las horas estimadas no pueden superar 999.99.",
+                "max_whole_digits": "Las horas estimadas no pueden superar 999.99.",
+                "max_decimal_places": "Las horas estimadas admiten máximo 2 decimales.",
             }},
         }
 
@@ -130,7 +137,37 @@ class SubtaskSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "fecha_objetivo": f"La fecha objetivo no puede ser posterior a la fecha del evento ({limite:%d/%m/%Y})."
                 })
+        self._verificar_horas_del_dia(attrs)
         return attrs
+
+    # US-07: el dia no puede pasarse del limite diario del organizador.
+    def _verificar_horas_del_dia(self, attrs):
+        request = self.context.get("request")
+        if request is None:
+            return
+        actual = self.instance
+        fecha = attrs.get("fecha_objetivo", getattr(actual, "fecha_objetivo", None))
+        horas = attrs.get("horas_estimadas", getattr(actual, "horas_estimadas", None))
+        estado = attrs.get("estado", getattr(actual, "estado", Subtask.PENDIENTE))
+
+        # Una gestion hecha no cuenta para las horas del dia.
+        if estado == Subtask.HECHA or fecha is None or horas is None:
+            return
+        # Si se edita sin tocar fecha, horas ni estado (ej. solo el titulo),
+        # no hay nada nuevo que validar.
+        if (
+            actual is not None
+            and fecha == actual.fecha_objetivo
+            and horas == actual.horas_estimadas
+            and estado == actual.estado
+        ):
+            return
+
+        verificar_conflicto(
+            request.user, fecha, horas,
+            excluir_id=actual.pk if actual is not None else None,
+        )
+    
 
 
 # Serializer de solo lectura usado por /hoy/. ademas de los campos de la
@@ -151,3 +188,26 @@ class HoySubtaskSerializer(serializers.ModelSerializer):
     def get_grupo(self, obj):
         # La vista anota cada objeto con `_grupo` antes de serializar.
         return getattr(obj, "_grupo", None)
+
+
+# US-12: límite diario de horas del organizador.
+MENSAJE_RANGO_LIMITE = "El límite diario debe estar entre 1 y 16 horas."
+
+
+class LimiteDiarioSerializer(serializers.Serializer):
+    horas = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        min_value=Decimal("1"),
+        max_value=Decimal("16"),
+        error_messages={
+            "required": "El límite diario es obligatorio.",
+            "null": "El límite diario es obligatorio.",
+            "invalid": "El límite diario debe ser un número válido.",
+            "min_value": MENSAJE_RANGO_LIMITE,
+            "max_value": MENSAJE_RANGO_LIMITE,
+            "max_digits": MENSAJE_RANGO_LIMITE,
+            "max_whole_digits": MENSAJE_RANGO_LIMITE,
+            "max_decimal_places": "El límite diario admite máximo 2 decimales.",
+        },
+    )

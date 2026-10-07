@@ -4,16 +4,51 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiExample, OpenApiParameter, OpenApiTypes
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Event, Subtask
-from .serializers import EventSerializer, SubtaskSerializer, HoySubtaskSerializer
+from .carga import limite_de
+from .models import Event, LimiteDiario, Subtask
+from .serializers import (
+    EventSerializer,
+    HoySubtaskSerializer,
+    LimiteDiarioSerializer,
+    SubtaskSerializer,
+)
 
+EJEMPLO_CONFLICTO = OpenApiExample(
+    "Conflicto de horas (5 h + 2 h = 7 h, límite 6 h)",
+    value={
+        "detail": (
+            "Con esta gestión, el 08/10/2026 quedarían 7 h planificadas "
+            "(5 h + 2 h) y tu límite diario es de 6 h."
+        ),
+        "conflicto": {
+            "fecha": "2026-10-08",
+            "horas_ya_planificadas": "5.00",
+            "horas_gestion": "2.00",
+            "horas_total": "7.00",
+            "limite_diario": "6.00",
+            "horas_disponibles": "1.00",
+            "exceso": "1.00",
+        },
+    },
+    response_only=True,
+    status_codes=["409"],
+)
+
+DESCRIPCION_CONFLICTO = (
+    "**Conflicto (409):** suma las horas de las gestiones *pendientes* del "
+    "organizador en esa fecha (todos sus eventos; las hechas no cuentan) y "
+    "usa el límite diario del organizador. Cabe si el total es menor o igual "
+    "al límite. Si se pasa, no se guarda nada y se responde con las cifras: "
+    "`horas_ya_planificadas`, `horas_gestion`, `horas_total`, `limite_diario`, "
+    "`horas_disponibles` y `exceso`."
+)
 
 ## view generica de health check para el back. Se deja publica (no
 ## requiere login) para que el front y las herramientas de despliegue
@@ -37,7 +72,42 @@ class EventListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(organizador=self.request.user)
 
-
+@extend_schema_view(
+    post=extend_schema(
+        summary="Crear una gestión logística (con validación de horas por día)",
+        description=(
+            "Crea una gestión del evento. Antes de guardarla se calcula la "
+            "carga del día (US-07).\n\n" + DESCRIPCION_CONFLICTO
+        ),
+        request=SubtaskSerializer,
+        responses={
+            201: SubtaskSerializer,
+            400: OpenApiTypes.OBJECT,
+            401: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+            409: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                "Nueva gestión",
+                value={
+                    "titulo": "Confirmar catering",
+                    "fecha_objetivo": "2026-10-08",
+                    "horas_estimadas": "2",
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Evento inexistente o de otro organizador",
+                value={"detail": "El evento no existe."},
+                response_only=True,
+                status_codes=["404"],
+            ),
+            EJEMPLO_CONFLICTO,
+        ],
+    ),
+)
+    
 ## Implementacion de view de subtasks US 2
 class SubtaskListCreateView(generics.ListCreateAPIView):
     serializer_class = SubtaskSerializer
@@ -77,6 +147,80 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return Event.objects.filter(organizador=self.request.user)
 
+@extend_schema_view(
+    patch=extend_schema(
+        summary="Editar una gestión: fecha objetivo, horas o estado (US-06 / US-08)",
+        description=(
+            "Edición parcial: se envía solo lo que cambia. Sirve para cambiar "
+            "la fecha objetivo (US-06), marcar como hecha/pendiente y resolver "
+            "un conflicto de horas moviendo la gestión a otra fecha o "
+            "reduciendo sus horas (US-08); el backend recalcula las horas del "
+            "día en cada intento. El cambio queda guardado y `/api/hoy/` la "
+            "devuelve en el grupo que corresponde a la nueva fecha.\n\n"
+            "| Status | Cuándo |\n"
+            "|---|---|\n"
+            "| 400 | Fecha anterior a hoy, posterior al evento, vacía o inválida; "
+            "horas ≤ 0, no numéricas o mayores a 999.99; estado distinto de "
+            "pendiente/hecha |\n"
+            "| 401 | Sin token |\n"
+            "| 404 | La gestión no existe o es de otro organizador |\n"
+            "| 409 | El cambio pasa el límite diario |\n\n"
+            + DESCRIPCION_CONFLICTO
+        ),
+        request=SubtaskSerializer,
+        responses={
+            200: SubtaskSerializer,
+            400: OpenApiTypes.OBJECT,
+            401: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+            409: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample("Mover a otra fecha", value={"fecha_objetivo": "2026-10-09"}, request_only=True),
+            OpenApiExample("Reducir las horas estimadas", value={"horas_estimadas": "1"}, request_only=True),
+            OpenApiExample(
+                "Mover y reducir a la vez",
+                value={"fecha_objetivo": "2026-10-09", "horas_estimadas": "1"},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Gestión actualizada",
+                value={
+                    "id": 1, "evento": 1, "titulo": "Confirmar catering",
+                    "fecha_objetivo": "2026-10-09", "horas_estimadas": "2.00",
+                    "estado": "pendiente", "creado_en": "2026-10-05T16:41:02-05:00",
+                },
+                response_only=True,
+                status_codes=["200"],
+            ),
+            OpenApiExample(
+                "Fecha anterior a hoy",
+                value={"fecha_objetivo": ["La fecha objetivo no puede ser anterior a hoy."]},
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "Fecha posterior al evento",
+                value={"fecha_objetivo": ["La fecha objetivo no puede ser posterior a la fecha del evento (04/11/2026)."]},
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "Horas no válidas",
+                value={"horas_estimadas": ["Las horas estimadas deben ser mayores a cero."]},
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "Gestión inexistente o de otro organizador",
+                value={"detail": "La gestión no existe."},
+                response_only=True,
+                status_codes=["404"],
+            ),
+            EJEMPLO_CONFLICTO,
+        ],
+    ),
+)
 
 class SubtaskDetailView(generics.RetrieveUpdateDestroyAPIView):
     """GET/PATCH/PUT/DELETE /api/events/<event_id>/subtasks/<pk>/"""
@@ -91,8 +235,10 @@ class SubtaskDetailView(generics.RetrieveUpdateDestroyAPIView):
         )
 
     def get_object(self):
-        queryset = self.get_queryset()
-        return get_object_or_404(queryset, pk=self.kwargs['pk'])
+        gestion = self.get_queryset().filter(pk=self.kwargs['pk']).first()
+        if gestion is None:
+            raise NotFound("La gestión no existe.")
+        return gestion
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -276,3 +422,70 @@ class HoyView(APIView):
             "total": len(vencidas) + len(para_hoy) + len(proximas),
         }
         return Response(data, status=status.HTTP_200_OK)
+
+
+## US-12: limite diario de horas por organizador
+class LimiteDiarioView(APIView):
+    """GET/PUT /api/limite-diario/"""
+
+    permission_classes = [IsAuthenticated]
+
+
+    @extend_schema(
+        summary="Consultar el límite diario de horas (US-12)",
+        description=(
+            "Devuelve el límite de horas por día del organizador autenticado. "
+            "Si nunca lo configuró, responde el valor por defecto (6 h). "
+            "Cada organizador tiene el suyo."
+        ),
+        responses={200: LimiteDiarioSerializer, 401: OpenApiTypes.OBJECT},
+        examples=[
+            OpenApiExample(
+                "Límite actual",
+                value={"horas": "6.00"},
+                response_only=True,
+                status_codes=["200"],
+            ),
+        ],
+    )
+
+    def get(self, request):
+        # Si el organizador nunca lo configuro, se responde el valor por
+        # defecto sin crear nada en la base de datos.
+        data = LimiteDiarioSerializer({"horas": limite_de(request.user)}).data
+        return Response(data, status=status.HTTP_200_OK)
+
+
+    @extend_schema(
+        summary="Configurar el límite diario de horas (US-12)",
+        description=(
+            "Guarda el límite del organizador autenticado. Rango válido: "
+            "1 a 16 horas, con máximo 2 decimales."
+        ),
+        request=LimiteDiarioSerializer,
+        responses={200: LimiteDiarioSerializer, 400: OpenApiTypes.OBJECT, 401: OpenApiTypes.OBJECT},
+        examples=[
+            OpenApiExample("Límite de 8 horas", value={"horas": 8}, request_only=True),
+            OpenApiExample(
+                "Límite guardado",
+                value={"horas": "8.00"},
+                response_only=True,
+                status_codes=["200"],
+            ),
+            OpenApiExample(
+                "Fuera de rango",
+                value={"horas": ["El límite diario debe estar entre 1 y 16 horas."]},
+                response_only=True,
+                status_codes=["400"],
+            ),
+        ],
+    )
+    
+    def put(self, request):
+        serializer = LimiteDiarioSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        LimiteDiario.objects.update_or_create(
+            organizador=request.user,
+            defaults={"horas": serializer.validated_data["horas"]},
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)

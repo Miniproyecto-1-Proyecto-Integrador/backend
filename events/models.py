@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 class Event(models.Model):
@@ -71,3 +71,26 @@ class Subtask(models.Model):
 
     def __str__(self):
         return f"{self.titulo} ({self.evento.nombre})"
+
+
+# Límite de horas de trabajo por día de cada organizador (US-12).
+# Si el organizador nunca lo configuró, no hay fila y se usa el valor por defecto.
+LIMITE_DIARIO_DEFECTO = 6
+
+
+class LimiteDiario(models.Model):
+    organizador = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        related_name="limite_diario",
+        on_delete=models.CASCADE,
+    )
+    horas = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=LIMITE_DIARIO_DEFECTO,
+        validators=[MinValueValidator(1), MaxValueValidator(16)],
+    )
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.organizador} - {self.horas} h/día"
