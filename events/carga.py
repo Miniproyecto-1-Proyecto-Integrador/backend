@@ -74,3 +74,20 @@ def verificar_conflicto(usuario, fecha, horas, excluir_id=None):
             "exceso": _dos(total - limite),
         },
     })
+
+def dias_que_se_pasarian(usuario, limite):
+    """
+    Días (con gestiones PENDIENTES del organizador) cuyo total de horas
+    supera `limite`. Devuelve [(fecha, total), ...] ordenado por fecha.
+    """
+    filas = (
+        Subtask.objects.filter(
+            evento__organizador=usuario,
+            estado=Subtask.PENDIENTE,
+        )
+        .values("fecha_objetivo")
+        .annotate(total=Sum("horas_estimadas"))
+        .filter(total__gt=limite)
+        .order_by("fecha_objetivo")
+    )
+    return [(f["fecha_objetivo"], f["total"]) for f in filas]

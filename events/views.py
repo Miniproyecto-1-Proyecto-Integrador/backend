@@ -11,7 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .carga import limite_de
+from .carga import dias_que_se_pasarian, limite_de
 from .models import Event, LimiteDiario, Subtask
 from .serializers import (
     EventSerializer,
@@ -484,8 +484,29 @@ class LimiteDiarioView(APIView):
     def put(self, request):
         serializer = LimiteDiarioSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        nuevas_horas = serializer.validated_data["horas"]
+
+        # No se puede bajar el límite si ya hay días con gestiones
+        # pendientes que quedarían por encima del nuevo valor.
+        excedidos = dias_que_se_pasarian(request.user, nuevas_horas)
+        if excedidos:
+            ejemplos = ", ".join(
+                f"{fecha:%d/%m/%Y} ({total.normalize():f} h)"
+                for fecha, total in excedidos[:3]
+            )
+            resto = len(excedidos) - 3
+            if resto > 0:
+                ejemplos += f" y {resto} más"
+            raise ValidationError({
+                "horas": [
+                    f"No puedes bajar el límite a {nuevas_horas.normalize():f} h "
+                    f"porque ya tienes días que lo superarían: {ejemplos}. "
+                    "Reprograma o completa esas gestiones primero."
+                ]
+            })
+
         LimiteDiario.objects.update_or_create(
             organizador=request.user,
-            defaults={"horas": serializer.validated_data["horas"]},
+            defaults={"horas": nuevas_horas},
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
