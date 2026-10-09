@@ -148,7 +148,8 @@ class ProximaFechaDisponibleView(APIView):
     """
     GET /api/events/<event_id>/subtasks/proxima-fecha/
     Busca la primera fecha posterior a la indicada donde quepan
-    las horas completas de una nueva gestion.
+    las horas completas de una gestión.
+    Permite excluir una subtarea cuando se está editando.
     """
 
     permission_classes = [IsAuthenticated]
@@ -164,6 +165,7 @@ class ProximaFechaDisponibleView(APIView):
 
         fecha_param = request.query_params.get("fecha")
         horas_param = request.query_params.get("horas")
+        excluir_id_param = request.query_params.get("excluir_id")
 
         if not fecha_param or not horas_param:
             raise ValidationError({
@@ -186,6 +188,28 @@ class ProximaFechaDisponibleView(APIView):
                 "horas": "Las horas deben ser un número mayor que cero."
             })
 
+        excluir_id = None
+
+        if excluir_id_param:
+            try:
+                excluir_id = int(excluir_id_param)
+                if excluir_id <= 0:
+                    raise ValueError
+            except (ValueError, TypeError):
+                raise ValidationError({
+                    "excluir_id": "El ID de la subtarea no es válido."
+                })
+
+            subtarea = Subtask.objects.filter(
+                pk=excluir_id,
+                evento=evento,
+            ).first()
+
+            if subtarea is None:
+                raise ValidationError({
+                    "excluir_id": "La subtarea no pertenece a este evento."
+                })
+
         hoy = timezone.localdate()
         fecha_maxima = timezone.localtime(evento.fecha_hora).date()
         fecha_inicio = max(fecha_inicio, hoy)
@@ -194,7 +218,11 @@ class ProximaFechaDisponibleView(APIView):
         fecha_candidata = fecha_inicio + timedelta(days=1)
 
         while fecha_candidata <= fecha_maxima:
-            ocupadas = horas_del_dia(request.user, fecha_candidata)
+            ocupadas = horas_del_dia(
+                request.user,
+                fecha_candidata,
+                excluir_id=excluir_id,
+            )
 
             if ocupadas + horas <= limite:
                 return Response({
