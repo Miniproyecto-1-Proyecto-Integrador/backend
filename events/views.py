@@ -1,17 +1,25 @@
-from datetime import date
+
+from datetime import date, timedelta
+from decimal import Decimal
 
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiExample, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import (
+    extend_schema,
+    extend_schema_view,
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiTypes,
+)
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .carga import dias_que_se_pasarian, limite_de
+from .carga import dias_que_se_pasarian, horas_del_dia, limite_de
 from .models import Event, LimiteDiario, Subtask
 from .serializers import (
     EventSerializer,
@@ -19,6 +27,7 @@ from .serializers import (
     LimiteDiarioSerializer,
     SubtaskSerializer,
 )
+
 
 EJEMPLO_CONFLICTO = OpenApiExample(
     "Conflicto de horas (5 h + 2 h = 7 h, límite 6 h)",
@@ -135,6 +144,76 @@ class SubtaskListCreateView(generics.ListCreateAPIView):
         ctx["evento"] = self.get_event()
         return ctx
 
+class ProximaFechaDisponibleView(APIView):
+    """
+    GET /api/events/<event_id>/subtasks/proxima-fecha/
+    Busca la primera fecha posterior a la indicada donde quepan
+    las horas completas de una nueva gestion.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, event_id):
+        evento = Event.objects.filter(
+            pk=event_id,
+            organizador=request.user,
+        ).first()
+
+        if evento is None:
+            raise NotFound("El evento no existe.")
+
+        fecha_param = request.query_params.get("fecha")
+        horas_param = request.query_params.get("horas")
+
+        if not fecha_param or not horas_param:
+            raise ValidationError({
+                "detail": "Debes indicar la fecha y las horas estimadas."
+            })
+
+        try:
+            fecha_inicio = date.fromisoformat(fecha_param)
+        except ValueError:
+            raise ValidationError({
+                "fecha": "La fecha debe tener el formato AAAA-MM-DD."
+            })
+
+        try:
+            horas = Decimal(horas_param)
+            if not horas.is_finite() or horas <= 0:
+                raise ValueError
+        except (ValueError, TypeError, ArithmeticError):
+            raise ValidationError({
+                "horas": "Las horas deben ser un número mayor que cero."
+            })
+
+        hoy = timezone.localdate()
+        fecha_maxima = timezone.localtime(evento.fecha_hora).date()
+        fecha_inicio = max(fecha_inicio, hoy)
+
+        limite = limite_de(request.user)
+        fecha_candidata = fecha_inicio + timedelta(days=1)
+
+        while fecha_candidata <= fecha_maxima:
+            ocupadas = horas_del_dia(request.user, fecha_candidata)
+
+            if ocupadas + horas <= limite:
+                return Response({
+                    "disponible": True,
+                    "fecha": fecha_candidata.isoformat(),
+                    "horas_estimadas": str(horas),
+                    "horas_ya_planificadas": str(ocupadas),
+                    "limite_diario": str(limite),
+                })
+
+            fecha_candidata += timedelta(days=1)
+
+        return Response({
+            "disponible": False,
+            "mensaje": (
+                "No hay una fecha disponible antes o el día del evento "
+                "para la duración completa de esta gestión."
+            ),
+        })
 
 ## Implementacion de US-3
 ## aqui ya tenemos creados los eventos, las subtasks, por lo que
