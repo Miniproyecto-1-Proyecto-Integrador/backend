@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -39,12 +40,13 @@ class Subtask(models.Model):
     # necesita distinguir gestiones pendientes de las que
     # ya se marcaron como hechas o pospuestas (lo de pospuestas se completara
     # en otro sprint pero el campo se deja listo desde ya)
-
     PENDIENTE = "pendiente"
     HECHA = "hecha"
+    POSPUESTA = "pospuesta"
     ESTADO_CHOICES = [
         (PENDIENTE, "Pendiente"),
         (HECHA, "Hecha"),
+        (POSPUESTA, "Pospuesta"),
     ]
 
     evento = models.ForeignKey(
@@ -57,13 +59,14 @@ class Subtask(models.Model):
     horas_estimadas = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        validators=[MinValueValidator(0.01)],
+        validators=[MinValueValidator(Decimal("0.01"))],
     )
     estado = models.CharField(
         max_length=20,
         choices=ESTADO_CHOICES,
         default=PENDIENTE,
     )
+    nota = models.TextField(blank=True, default="")
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
