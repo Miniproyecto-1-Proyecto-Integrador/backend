@@ -125,16 +125,31 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+if os.getenv("DJANGO_TESTING") == "1":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("TEST_DB_NAME", "proyecto_pruebas"),
+            "USER": os.getenv("TEST_DB_USER", "pruebas"),
+            "PASSWORD": os.getenv("TEST_DB_PASSWORD", ""),
+            "HOST": os.getenv("TEST_DB_HOST", "127.0.0.1"),
+            "PORT": os.getenv("TEST_DB_PORT", "5433"),
+            "TEST": {
+                "NAME": "test_proyecto_pruebas",
+            },
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("DB_NAME"),
+            "USER": os.getenv("DB_USER"),
+            "PASSWORD": os.getenv("DB_PASSWORD"),
+            "HOST": os.getenv("DB_HOST"),
+            "PORT": os.getenv("DB_PORT"),
+        }
+    }
 
 
 # Password validation

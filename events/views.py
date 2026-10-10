@@ -259,7 +259,8 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
         summary="Editar una gestión: fecha objetivo, horas o estado (US-06 / US-08)",
         description=(
             "Edición parcial: se envía solo lo que cambia. Sirve para cambiar "
-            "la fecha objetivo (US-06), marcar como hecha/pendiente y resolver "
+            "la fecha objetivo (US-06), marcar como hecha, pendiente o pospuesta"
+            "y registrar una nota opcional (US-09). También permite resolver"
             "un conflicto de horas moviendo la gestión a otra fecha o "
             "reduciendo sus horas (US-08); el backend recalcula las horas del "
             "día en cada intento. El cambio queda guardado y `/api/hoy/` la "
@@ -268,7 +269,7 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
             "|---|---|\n"
             "| 400 | Fecha anterior a hoy, posterior al evento, vacía o inválida; "
             "horas ≤ 0, no numéricas o mayores a 999.99; estado distinto de "
-            "pendiente/hecha |\n"
+            "pendiente/hecha/pospuesta |\n"
             "| 401 | Sin token |\n"
             "| 404 | La gestión no existe o es de otro organizador |\n"
             "| 409 | El cambio pasa el límite diario |\n\n"
@@ -364,8 +365,12 @@ REGLA_PRIORIDAD = (
     "mismo día, se prioriza la que requiere menos horas estimadas."
 )
 
-ESTADOS_VALIDOS = {Subtask.PENDIENTE, Subtask.HECHA, "todas"}
-
+ESTADOS_VALIDOS = {
+    Subtask.PENDIENTE,
+    Subtask.HECHA,
+    Subtask.POSPUESTA,
+    "todas",
+}
 
 class HoyView(APIView):
     """
@@ -397,7 +402,7 @@ class HoyView(APIView):
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 required=False,
-                enum=[Subtask.PENDIENTE, Subtask.HECHA, "todas"],
+                enum=[Subtask.PENDIENTE, Subtask.HECHA, Subtask.POSPUESTA, "todas"],
                 description="Filtra por estado de la gestión. Default: pendiente.",
             ),
         ],
@@ -449,7 +454,7 @@ class HoyView(APIView):
             ),
             OpenApiExample(
                 "Estado inválido",
-                value={"estado": ["Valor inválido. Usa uno de: hecha, pendiente, todas."]},
+                value={"estado": ["Valor inválido. Usa uno de: hecha, pendiente, pospuesta, todas."]},
                 response_only=True,
                 status_codes=["400"],
             ),
@@ -617,3 +622,48 @@ class LimiteDiarioView(APIView):
             defaults={"horas": nuevas_horas},
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# US-10: consultar el progreso de un evento.
+class ProgresoEventoView(APIView):
+    """GET /api/events/<event_id>/progreso/"""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Consultar el progreso de un evento (US-10)",
+        description=(
+            "Devuelve el total de subtareas, las subtareas hechas y el "
+            "porcentaje completado del evento del organizador autenticado. "
+            "Las subtareas pendientes y pospuestas no cuentan como hechas. "
+            "Si no hay subtareas, el porcentaje es 0."
+        ),
+        responses={
+            200: OpenApiTypes.OBJECT,
+            401: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+        },
+    )
+    def get(self, request, event_id):
+        evento = Event.objects.filter(
+            pk=event_id,
+            organizador=request.user,
+        ).first()
+
+        if evento is None:
+            raise NotFound("El evento no existe.")
+
+        total = evento.subtasks.count()
+        hechas = evento.subtasks.filter(estado=Subtask.HECHA).count()
+
+        porcentaje = round((hechas / total) * 100) if total else 0
+
+        return Response(
+            {
+                "evento_id": evento.id,
+                "total_subtareas": total,
+                "subtareas_hechas": hechas,
+                "porcentaje": porcentaje,
+            },
+            status=status.HTTP_200_OK,
+        )
