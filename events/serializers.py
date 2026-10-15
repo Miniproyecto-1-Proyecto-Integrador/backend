@@ -73,7 +73,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
         model = Subtask
         fields = [
             "id", "evento", "titulo", "fecha_objetivo", "horas_estimadas",
-            "estado", "creado_en",
+            "estado", "nota", "creado_en",
         ]
         read_only_fields = ["id", "evento", "creado_en"]
         extra_kwargs = {
@@ -102,7 +102,9 @@ class SubtaskSerializer(serializers.ModelSerializer):
         choices=Subtask.ESTADO_CHOICES,
         required=False,
         error_messages={
-            "invalid_choice": "El estado solo puede ser 'pendiente' o 'hecha'."
+            "invalid_choice": (
+                "El estado solo puede ser 'pendiente', 'hecha' o 'pospuesta'."
+            )
         },
     )
 
