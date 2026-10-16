@@ -5,6 +5,7 @@ from .models import Event, Subtask
 from django.utils import timezone
 
 
+
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
@@ -73,9 +74,9 @@ class SubtaskSerializer(serializers.ModelSerializer):
         model = Subtask
         fields = [
             "id", "evento", "titulo", "fecha_objetivo", "horas_estimadas",
-            "estado", "nota", "creado_en",
+            "estado", "nota", "creado_en", "done_at",
         ]
-        read_only_fields = ["id", "evento", "creado_en"]
+        read_only_fields = ["id", "evento", "creado_en", "done_at"]
         extra_kwargs = {
             "titulo": {"error_messages": {
                 "blank": "El título de la gestión es obligatorio.",
@@ -169,6 +170,20 @@ class SubtaskSerializer(serializers.ModelSerializer):
             request.user, fecha, horas,
             excluir_id=actual.pk if actual is not None else None,
         )
+
+    def update(self, instance, validated_data):
+        from django.utils import timezone
+
+        estado_anterior = instance.estado
+        nuevo_estado = validated_data.get("estado", estado_anterior)
+
+        if nuevo_estado == Subtask.HECHA and estado_anterior != Subtask.HECHA:
+            instance.done_at = timezone.now()
+
+        elif nuevo_estado != Subtask.HECHA:
+            instance.done_at = None
+
+        return super().update(instance, validated_data)
     
 
 

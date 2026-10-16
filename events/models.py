@@ -68,6 +68,12 @@ class Subtask(models.Model):
     )
     nota = models.TextField(blank=True, default="")
     creado_en = models.DateTimeField(auto_now_add=True)
+    
+    done_at = models.DateTimeField(
+    null=True,
+    blank=True,
+    editable=False,
+)
 
     class Meta:
         ordering = ["fecha_objetivo"]
