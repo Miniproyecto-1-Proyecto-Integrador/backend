@@ -72,8 +72,8 @@ Las pruebas usan una base PostgreSQL aparte, activada con `DJANGO_TESTING=1`
 El servicio está vinculado a la rama `main`: cada commit o PR fusionado en `main`
 dispara un redespliegue automático.
 
-- **Build Command:** [manuelajeje]
-- **Start Command:** [manuelajeje]
+- **Build Command:** `$ pip install -r requirements.txt`
+- **Start Command:** `$ python manage.py migrate && gunicorn config.wsgi.application`
 - **Migraciones:** se ejecutan en cada despliegue. Si el modelo no cambió,
   la migración termina rápido sin modificar nada.
 - **Variables de entorno:** se configuran en el dashboard de Render
