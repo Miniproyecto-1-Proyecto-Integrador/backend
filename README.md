@@ -90,7 +90,19 @@ Los endpoints requieren un token JWT en el encabezado:
 
 ## Endpoints principales
 
-tablita md, un segundito jejejje
+| Método HTTP | Endpoint | Descripción |
+|---|---|---|
+| GET, POST | `/api/events/` | Consultar los eventos del usuario y crear un evento. |
+| GET, PATCH, PUT, DELETE | `/api/events/{id}/` | Consultar, actualizar o eliminar un evento. |
+| GET, POST | `/api/events/{event_id}/subtasks/` | Listar o crear subtareas de un evento. |
+| GET, PATCH, PUT, DELETE | `/api/events/{event_id}/subtasks/{pk}/` | Consultar, actualizar o eliminar una subtarea específica. |
+| GET | `/api/events/{event_id}/progreso/` | Consultar el total de subtareas, las hechas y el porcentaje de progreso. |
+| GET | `/api/events/{event_id}/subtasks/proxima-fecha/` | Consultar una próxima fecha disponible para una subtarea. |
+| GET | `/api/hoy/` | Consultar las subtareas organizadas para la vista Hoy. |
+| GET, PUT | `/api/limite-diario/` | Consultar o actualizar el límite diario de carga. |
+| GET | `/api/health/` | Comprobar que el backend está funcionando. |
+| GET | `/api/schema/` | Obtener el esquema OpenAPI. |
+| GET | `/api/docs/` | Abrir la documentación interactiva Swagger. |
 
 ## Manejo de errores
 
